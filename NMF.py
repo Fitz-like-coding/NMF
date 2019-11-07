@@ -1,5 +1,6 @@
 import time
 import numpy as np
+from numpy.linalg import norm
 
 class NMF(object):
     def __init__(self, n_components, max_iter, tol, cost_function = "euclidean", fix_seed=False):
@@ -32,8 +33,9 @@ class NMF(object):
             self.W = np.multiply(self.W, np.divide(VHT, WHHT))
 
             # calculate loss
-            loss_new = np.subtract(self.V, np.dot(self.W, self.H))
-            loss_new = np.sum(loss_new*loss_new)
+            # loss_new = np.subtract(self.V, np.dot(self.W, self.H))
+            # loss_new = np.sum(loss_new*loss_new)
+            loss_new = norm(self.V - np.dot(self.W, self.H), 'fro')**2/2.0
             end_time = time.time()
             print('Step={}, Loss={}, Time={}s'.format(itr, loss_new, end_time-start_time))
             itr += 1
@@ -90,7 +92,9 @@ class NMF(object):
         n_row, n_col = self.V.shape
         n_topic = self.n_components
         self.W = np.random.random((n_row, n_topic))
+        self.W = self.W * np.sqrt(self.V.mean() / self.n_components)
         self.H = np.random.random((n_topic, n_col))
+        self.H = self.H * np.sqrt(self.V.mean() / self.n_components)
 
         if self.cost_function == "euclidean":
             self._update_euclidean()
