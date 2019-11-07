@@ -2,8 +2,14 @@ import time
 import numpy as np
 from numpy.linalg import norm
 
+'''
+to do:
+    add NNDSVD initialization method
+    add L1, L2 norm
+'''
+
 class NMF(object):
-    def __init__(self, n_components, max_iter, tol, cost_function = "euclidean", fix_seed=False):
+    def __init__(self, n_components, max_iter, tol, cost_function = "euclidean", fix_seed=False, init = "random"):
 
         if fix_seed: 
             np.random.seed(0)
@@ -33,8 +39,6 @@ class NMF(object):
             self.W = np.multiply(self.W, np.divide(VHT, WHHT))
 
             # calculate loss
-            # loss_new = np.subtract(self.V, np.dot(self.W, self.H))
-            # loss_new = np.sum(loss_new*loss_new)
             loss_new = norm(self.V - np.dot(self.W, self.H), 'fro')**2/2.0
             end_time = time.time()
             print('Step={}, Loss={}, Time={}s'.format(itr, loss_new, end_time-start_time))
