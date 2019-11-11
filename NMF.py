@@ -4,6 +4,7 @@ from numpy.linalg import norm
 
 '''
 to do:
+    add transform function
     add NNDSVD initialization method
     add L1, L2 norm
 '''
@@ -22,24 +23,35 @@ class NMF(object):
         self.tol = tol
         self.cost_function = cost_function
 
-    def _update_euclidean(self):
+    def _update_euclidean(self, V, transform = False):
+        n_row, n_col = V.shape
+        n_topic = self.n_components
+        W = np.random.random((n_row, n_topic))
+        W = W * np.sqrt(V.mean() / self.n_components)
+        H = np.random.random((n_topic, n_col))
+        H = H * np.sqrt(V.mean() / self.n_components)
+
+        if transform:
+            H = self.H
+
         epss = 1e-20
         loss_old = None
         itr = 0
         start_time = time.time()
         while itr < self.max_iter:
-            # update H
-            WTV = np.dot(self.W.T, self.V)
-            WTWH = np.dot(np.dot(self.W.T, self.W), self.H) + epss
-            self.H = np.multiply(self.H, np.divide(WTV, WTWH))
+            if not transform:
+                # update H
+                WTV = np.dot(W.T, V)
+                WTWH = np.dot(np.dot(W.T, W), H) + epss
+                H = np.multiply(H, np.divide(WTV, WTWH))
 
             # update W
-            VHT = np.dot(self.V, self.H.T)
-            WHHT = np.dot(np.dot(self.W, self.H), self.H.T) + epss
-            self.W = np.multiply(self.W, np.divide(VHT, WHHT))
+            VHT = np.dot(V, H.T)
+            WHHT = np.dot(np.dot(W, H), H.T) + epss
+            W = np.multiply(W, np.divide(VHT, WHHT))
 
             # calculate loss
-            loss_new = norm(self.V - np.dot(self.W, self.H), 'fro')**2/2.0
+            loss_new = norm(V - np.dot(W, H), 'fro')**2/2.0
             end_time = time.time()
             print('Step={}, Loss={}, Time={}s'.format(itr, loss_new, end_time-start_time))
             itr += 1
@@ -52,30 +64,42 @@ class NMF(object):
                 break
             else:
                 loss_old = loss_new
+        return V, W, H
 
-    def _update_kl(self):
+    def _update_kl(self, V, transform = False):
+        n_row, n_col = V.shape
+        n_topic = self.n_components
+        W = np.random.random((n_row, n_topic))
+        W = W * np.sqrt(V.mean() / self.n_components)
+        H = np.random.random((n_topic, n_col))
+        H = H * np.sqrt(V.mean() / self.n_components)
+
+        if transform:
+            H = self.H
+        
         epss = 1e-20
         loss_old = None
         itr = 0
         start_time = time.time()
         while itr < self.max_iter:
-            # update H
-            WH = np.dot(self.W, self.H) + epss
-            VovWH = np.divide(self.V, WH)
-            WVovWH = np.dot(self.W.T, VovWH)
-            Wka = np.sum(self.W, axis=0) + epss
-            self.H = np.multiply(self.H, np.divide(WVovWH.T, Wka).T)
+            if not transform:
+                # update H
+                WH = np.dot(W, H) + epss
+                VovWH = np.divide(V, WH)
+                WVovWH = np.dot(W.T, VovWH)
+                Wka = np.sum(W, axis=0) + epss
+                H = np.multiply(H, np.divide(WVovWH.T, Wka).T)
 
             # update W
-            WH = np.dot(self.W, self.H) + epss
-            VovWH = np.divide(self.V, WH)
-            HVovWH = np.dot(self.H, VovWH.T)
-            Hav = np.sum(self.H, axis=1) + epss
-            self.W = np.multiply(self.W, np.divide(HVovWH.T, Hav))    
+            WH = np.dot(W, H) + epss
+            VovWH = np.divide(V, WH)
+            HVovWH = np.dot(H, VovWH.T)
+            Hav = np.sum(H, axis=1) + epss
+            W = np.multiply(W, np.divide(HVovWH.T, Hav))    
 
             # calculate loss
-            B = np.dot(self.W, self.H) + epss
-            VovB = np.log(np.divide(self.V, B) + epss)
+            B = np.dot(W, H) + epss
+            VovB = np.log(np.divide(V, B) + epss)
             loss_new = np.sum(np.multiply(self.V, VovB) - V + B)
             end_time = time.time()
             print('Step={}, Loss={}, Time={}s'.format(itr, loss_new, end_time-start_time))
@@ -89,21 +113,24 @@ class NMF(object):
                 break
             else:
                 loss_old = loss_new        
-
+        return V, W, H
+        
     def fit(self, V):
         assert type(V) == np.ndarray, 'error: require numpy.array as input'
-        self.V = V
-        n_row, n_col = self.V.shape
-        n_topic = self.n_components
-        self.W = np.random.random((n_row, n_topic))
-        self.W = self.W * np.sqrt(self.V.mean() / self.n_components)
-        self.H = np.random.random((n_topic, n_col))
-        self.H = self.H * np.sqrt(self.V.mean() / self.n_components)
+        if self.cost_function == "euclidean":
+            self.V, self.W, self.H = self._update_euclidean(V)
+        elif self.cost_function == "kullback-leibler":
+            self.V, self.W, self.H = self._update_kl(V)
+
+    def tranfrom(self, V):
+        assert self.H != np.array([]), 'error: must be fit first'
 
         if self.cost_function == "euclidean":
-            self._update_euclidean()
+            V, W, H = self._update_euclidean(transform=True)
         elif self.cost_function == "kullback-leibler":
-            self._update_kl()
+            V, W, H = self._update_kl(transform=True)
+        return W
+
 
 def text2index(posts, word2id):
     x_train = []
